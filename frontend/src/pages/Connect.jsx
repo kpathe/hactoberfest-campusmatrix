@@ -13,12 +13,13 @@ const Connect = () => {
 
   const fetchDirectory = async (search = "") => {
     try {
-      const res = await axios.get(`/api/connect${search ? `?q=${encodeURIComponent(search)}` : ""}`, {
+      const res = await axios.get(`/api/connect${search ? `?search=${encodeURIComponent(search)}` : ""}`, {
         withCredentials: true,
       });
       setStudents(res.data);
+      // Backend returns populated Profile objects; index by user._id for follow state
       setFollowingState(
-        Object.fromEntries(res.data.map((student) => [student._id, student.isFollowing]))
+        Object.fromEntries(res.data.map((profile) => [profile.user?._id, false]))
       );
     } catch (err) {
       toast.error("Failed to load student directory.");
@@ -39,24 +40,24 @@ const Connect = () => {
     return () => clearTimeout(timeout);
   }, [query]);
 
-  const toggleFollow = async (student) => {
-    const isFollowing = followingState[student._id];
+  const toggleFollow = async (userId, username) => {
+    const isFollowing = followingState[userId];
     try {
       if (isFollowing) {
-        await axios.delete(`/api/connect/follow/${student._id}`, { withCredentials: true });
+        await axios.delete(`/api/connect/follow/${userId}`, { withCredentials: true });
       } else {
-        await axios.post("/api/connect/follow", { userId: student._id }, { withCredentials: true });
+        await axios.post("/api/connect/follow", { targetUserId: userId }, { withCredentials: true });
       }
 
-      setFollowingState((prev) => ({ ...prev, [student._id]: !isFollowing }));
+      setFollowingState((prev) => ({ ...prev, [userId]: !isFollowing }));
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update follow state.");
     }
   };
 
-  const startChat = async (student) => {
+  const startChat = async (username) => {
     try {
-      await axios.post("/api/chat", { identifier: student.username }, { withCredentials: true });
+      await axios.post("/api/chat", { identifier: username }, { withCredentials: true });
       toast.success("Message request sent.");
       navigate("/messages");
     } catch (err) {
@@ -96,34 +97,37 @@ const Connect = () => {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {students.map((student) => (
+            {students.map((profile) => {
+              const studentUser = profile.user || {};
+              const userId = studentUser._id;
+              return (
               <div
-                key={student._id}
+                key={profile._id}
                 className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-indigo-900/10"
               >
                 <button
-                  onClick={() => navigate(`/${student.username}`)}
+                  onClick={() => navigate(`/${studentUser.username}`)}
                   className="w-full text-left flex-1"
                 >
                   <div className="mb-4 flex items-center gap-3">
                     <img
-                      src={student.profileImage || "/avatar.png"}
-                      alt={student.name}
+                      src={profile.profileImage || "/avatar.png"}
+                      alt={studentUser.name}
                       className="h-14 w-14 rounded-2xl object-cover border border-slate-200 dark:border-slate-700"
                     />
                     <div>
-                      <h2 className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">{student.name}</h2>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">@{student.username}</p>
+                      <h2 className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 transition-colors">{studentUser.name}</h2>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">@{studentUser.username}</p>
                     </div>
                   </div>
 
                   <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                    <p>Branch: <span className="font-medium text-slate-800 dark:text-slate-200">{student.department || "Not set"}</span></p>
-                    <p>Year: <span className="font-medium text-slate-800 dark:text-slate-200">{student.year}</span></p>
+                    <p>Branch: <span className="font-medium text-slate-800 dark:text-slate-200">{profile.department || "Not set"}</span></p>
+                    <p>Year: <span className="font-medium text-slate-800 dark:text-slate-200">{studentUser.year}</span></p>
                     <p>
                       Mentor:{" "}
                       <span className="font-medium text-slate-800 dark:text-slate-200">
-                        {student.roles?.includes("mentor") ? "Yes" : "No"}
+                        {studentUser.roles?.includes("mentor") ? "Yes" : "No"}
                       </span>
                     </p>
                   </div>
@@ -131,14 +135,14 @@ const Connect = () => {
 
                 <div className="mt-5 flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
                   <button
-                    onClick={() => toggleFollow(student)}
+                    onClick={() => toggleFollow(userId, studentUser.username)}
                     className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                      followingState[student._id]
+                      followingState[userId]
                         ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-transparent dark:border-emerald-900/50"
                         : "bg-indigo-600 dark:bg-indigo-600 text-white hover:bg-indigo-700 dark:hover:bg-indigo-500"
                     }`}
                   >
-                    {followingState[student._id] ? (
+                    {followingState[userId] ? (
                       <span className="inline-flex items-center justify-center gap-2 w-full">
                         <UserRoundCheck size={16} />
                         Following
@@ -151,7 +155,7 @@ const Connect = () => {
                     )}
                   </button>
                   <button
-                    onClick={() => startChat(student)}
+                    onClick={() => startChat(studentUser.username)}
                     className="rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                     title="Message"
                   >
@@ -161,7 +165,8 @@ const Connect = () => {
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
