@@ -13,10 +13,20 @@ const Matching = () => {
   });
   const [activeTab, setActiveTab] = useState("mentee"); // Default to mentee if dual
 
-  const fetchConnections = async () => {
+  const fetchConnections = async (currentUser) => {
     try {
-      const res = await axios.get("/api/matches/my-connections", { withCredentials: true });
-      setConnections(res.data);
+      const res = await axios.get("/api/match/my-connections", { withCredentials: true });
+      const rawConnections = Array.isArray(res.data) ? res.data : [];
+      const uid = currentUser?._id || user?._id;
+      setConnections({
+        acceptedConnections: rawConnections.filter((c) => c.status === "accepted"),
+        incomingRequests: rawConnections.filter(
+          (c) => c.status === "pending" && c.requestedBy?.toString() !== uid?.toString()
+        ),
+        outgoingRequests: rawConnections.filter(
+          (c) => c.status === "pending" && c.requestedBy?.toString() === uid?.toString()
+        ),
+      });
     } catch (err) {
       toast.error("Failed to load connection requests.");
     }
@@ -25,7 +35,7 @@ const Matching = () => {
   const fetchMatches = async (targetRole) => {
     setLoading(true);
     try {
-      const res = await axios.get(`/api/matches/potential?targetRole=${targetRole}`, {
+      const res = await axios.get(`/api/match/potential`, {
         withCredentials: true,
       });
       setMatches(res.data);
@@ -56,7 +66,7 @@ const Matching = () => {
           setLoading(false);
         }
         
-        fetchConnections();
+        fetchConnections(res.data);
       } catch (err) {
         toast.error("Failed to load matching context.");
       }
@@ -68,12 +78,12 @@ const Matching = () => {
   const requestConnection = async (targetUserId) => {
     try {
       await axios.post(
-        "/api/matches/request",
+        "/api/match/request",
         { targetUserId, targetRole: "mentor" },
         { withCredentials: true }
       );
       toast.success("Request sent successfully!");
-      setMatches((prev) => prev.filter((match) => match.profile.user._id !== targetUserId));
+      setMatches((prev) => prev.filter((m) => m.user?._id !== targetUserId && m.user !== targetUserId));
       fetchConnections();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to send request");
@@ -83,7 +93,7 @@ const Matching = () => {
   const updateConnectionStatus = async (connectionId, status) => {
     try {
       await axios.put(
-        "/api/matches/status",
+        "/api/match/status",
         { connectionId, status },
         { withCredentials: true }
       );
@@ -159,20 +169,23 @@ const Matching = () => {
                 </div>
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                  {matches.map((matchData) => {
-                    const profile = matchData.profile;
-                    const targetUser = profile.user;
+                  {matches.map((m) => {
+                    const targetUser = m.user;
                     return (
-                      <div key={profile._id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition transform hover:-translate-y-1">
+                      <div key={m._id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition transform hover:-translate-y-1">
                         <img src={targetUser?.image || "/avatar.png"} alt={targetUser?.name} className="w-20 h-20 mx-auto rounded-full mb-4 object-cover border-2 border-indigo-100 dark:border-indigo-900" />
                         <h2 className="text-xl font-semibold text-center text-gray-800 dark:text-gray-100">{targetUser?.name}</h2>
                         <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-1">@{targetUser?.username}</p>
-                        <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-2">{profile.department}</p>
+                        <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-2">{m.department}</p>
                         <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-bold text-center py-1 rounded mb-3">
-                          Match Score: {matchData.score}
+                          Match Score: {m.matchScore ?? "–"}
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 text-center line-clamp-2" title={matchData.matchReason}>{matchData.matchReason}</p>
-                        <button className="mt-4 w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition" onClick={() => requestConnection(targetUser._id)}>
+                        {m.sharedSkills?.length > 0 && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 text-center">
+                            Shared Skills: {m.sharedSkills.join(", ")}
+                          </p>
+                        )}
+                        <button className="mt-4 w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition" onClick={() => requestConnection(targetUser?._id)}>
                           Send Request
                         </button>
                       </div>

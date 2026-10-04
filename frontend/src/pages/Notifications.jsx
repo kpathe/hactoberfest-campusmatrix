@@ -18,7 +18,7 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     try {
       const res = await axios.get("/api/notifications", { withCredentials: true });
-      setNotifications(res.data);
+      setNotifications(res.data?.notifications ?? []);
     } catch (err) {
       toast.error("Failed to load notifications.");
     } finally {

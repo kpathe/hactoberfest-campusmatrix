@@ -81,27 +81,21 @@ const Login = ({ setUser }) => {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
     }
-    console.log("handleVerifyEmail called!");
     resetStatus();
     setLoading(true);
     const targetEmail = resetForm.email || form.email;
-    console.log("targetEmail:", targetEmail, "otp:", resetForm.otp);
     if (!targetEmail) {
-      console.log("No email found, returning error.");
       setError("Please enter your registered email address.");
       setLoading(false);
       return;
     }
     if (!resetForm.otp) {
-      console.log("No OTP found, returning error.");
       setError("Please enter the 6-digit OTP.");
       setLoading(false);
       return;
     }
     try {
-      console.log("Calling API: /api/auth/verify-email with payload", { email: targetEmail, otp: resetForm.otp });
       const res = await axios.post("/api/auth/verify-email", { email: targetEmail, otp: resetForm.otp });
-      console.log("API response:", res.data);
       setMessage(res.data?.message || "Email verified successfully! You can now log in.");
       setMode("login");
       setForm((prev) => ({ ...prev, email: targetEmail }));

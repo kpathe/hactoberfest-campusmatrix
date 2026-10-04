@@ -22,8 +22,22 @@ const Dashboard = ({ user }) => {
           axios.get("/api/notifications"),
         ]);
 
-        setConnections(connectionRes.data);
-        setNotifications(notificationRes.data.slice(0, 5));
+        // Backend returns a flat array of connections; reshape into expected buckets
+        const rawConnections = Array.isArray(connectionRes.data) ? connectionRes.data : [];
+        const userId = user?._id;
+        setConnections({
+          acceptedConnections: rawConnections.filter((c) => c.status === "accepted"),
+          incomingRequests: rawConnections.filter(
+            (c) => c.status === "pending" && c.requestedBy?.toString() !== userId
+          ),
+          outgoingRequests: rawConnections.filter(
+            (c) => c.status === "pending" && c.requestedBy?.toString() === userId
+          ),
+        });
+
+        // Backend returns { notifications, unreadCount } — extract the array
+        const notifs = notificationRes.data?.notifications ?? [];
+        setNotifications(notifs.slice(0, 5));
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
@@ -32,7 +46,7 @@ const Dashboard = ({ user }) => {
     };
 
     fetchData();
-  }, []);
+  }, [user?._id]);
 
   if (loading) {
     return (
